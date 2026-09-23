@@ -1,0 +1,14 @@
+# 技能发布仓库忽略规则（复制为 .gitignore 使用）
+# 密钥与本地配置绝不入库
+secrets.json
+.skill-distributor/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

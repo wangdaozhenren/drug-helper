@@ -1,0 +1,8 @@
+{
+  "mode": "owner_only",
+  "slug": "yongyao",
+  "src": "yongyao",
+  "worker": {
+    "url": "https://union-convert-tbxkbskpjy.cn-hangzhou.fcapp.run"
+  }
+}
