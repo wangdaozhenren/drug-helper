@@ -1,0 +1,68 @@
+# skill-distributor 自动同步工作流
+# 当 GitHub 仓库被打上 v* tag 时，自动执行 ClawHub / MCP Registry / 镜像同步。
+# 配置开关用仓库 Variables（Settings → Secrets and variables → Actions → Variables）：
+#   ENABLE_CLAWHUB / ENABLE_MCP / ENABLE_MIRROR 设为 true/false
+# 密钥用仓库 Secrets 配置：CLAWHUB_AUTH、MCP_GITHUB_TOKEN、MIRROR_URLS（每行一个 git URL）
+name: Skill Release Sync
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate skill package
+        run: |
+          test -f SKILL.md && echo "SKILL.md OK"
+          test -f .github/workflows/release.yml && echo "workflow OK"
+
+  clawhub:
+    needs: validate
+    if: ${{ vars.ENABLE_CLAWHUB == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clawhub
+        run: npm install -g clawhub
+      - name: Publish to ClawHub
+        run: |
+          clawhub login --token "$CLAWHUB_AUTH" --label ci
+          clawhub skill publish . --owner wangdaozhenren --version ${GITHUB_REF#refs/tags/v} --changelog "Release ${GITHUB_REF#refs/tags/v}"
+        env:
+          CLAWHUB_AUTH: ${{ secrets.CLAWHUB_AUTH }}
+
+  mcp-registry:
+    needs: validate
+    if: ${{ vars.ENABLE_MCP == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish MCP server
+        run: |
+          test -f server.json || { echo "no server.json, skip"; exit 0; }
+          curl -sSL https://github.com/modelcontextprotocol/mcp-publisher/releases/latest/download/mcp-publisher-linux-amd64 -o mcp-publisher
+          chmod +x mcp-publisher
+          # 若 CLI 支持非交互 token 认证则走 CI；否则本 job 会失败并提示本地执行
+          ./mcp-publisher publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.MCP_GITHUB_TOKEN }}
+
+  mirror:
+    needs: validate
+    if: ${{ vars.ENABLE_MIRROR == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to mirrors
+        run: |
+          echo "$MIRROR_URLS" | while IFS= read -r url; do
+            [ -z "$url" ] && continue
+            git push --mirror "$url" && echo "mirror ok: $url" || echo "mirror failed: $url"
+          done
+        env:
+          MIRROR_URLS: ${{ secrets.MIRROR_URLS }}
